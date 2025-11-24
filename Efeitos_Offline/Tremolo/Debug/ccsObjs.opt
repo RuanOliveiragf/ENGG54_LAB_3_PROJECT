@@ -1,0 +1,10 @@
+"./ezdsp5502.obj"
+"./ezdsp5502_gpio.obj"
+"./ezdsp5502_i2c.obj"
+"./ezdsp5502_i2cgpio.obj"
+"./ezdsp5502_mcbsp.obj"
+"./src/tremolo.obj"
+"./src/tremoloTest.obj"
+"../lnkx.cmd"
+-llibc.a
+-l"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/C55xxCSL/lib/csl5502x.lib"
