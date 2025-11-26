@@ -4,7 +4,7 @@
 
 SHELL = cmd.exe
 
-CG_TOOL_ROOT := C:/ti/ccs1270/ccs/tools/compiler/c5500_4.4.1
+CG_TOOL_ROOT := F:/ccs/tools/compiler/c5500_4.4.1
 
 GEN_OPTS__FLAG := 
 GEN_CMDS__FLAG := 
@@ -129,10 +129,10 @@ endif
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXE_OUTPUTS += \
-Tremolo.out 
+Tremolo.out \
 
 EXE_OUTPUTS__QUOTED += \
-"Tremolo.out" 
+"Tremolo.out" \
 
 
 # All Target
@@ -143,7 +143,7 @@ all: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 Tremolo.out: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 	@echo 'Building target: "$@"'
 	@echo 'Invoking: C5500 Linker'
-	"C:/ti/ccs1270/ccs/tools/compiler/c5500_4.4.1/bin/cl55" -v5502 --memory_model=large -g --define=c5502 --display_error_number --diag_warning=225 --ptrdiff_size=32 -z -m"Tremolo.map" --stack_size=0x200 --heap_size=0x400 -i"C:/Users/FabioM/workspace_v12/Tremolo/inc" -i"C:/ti/ccs1270/ccs/tools/compiler/c5500_4.4.1/lib" -i"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/lib" -i"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/C55xxCSL/lib" -i"C:/ti/ccs1270/ccs/tools/compiler/c5500_4.4.1/include" --reread_libs --display_error_number --warn_sections --xml_link_info="Tremolo_linkInfo.xml" --rom_model --sys_stacksize=0x200 -o "Tremolo.out" $(ORDERED_OBJS)
+	"F:/ccs/tools/compiler/c5500_4.4.1/bin/cl55" -v5502 --memory_model=large -g --define=c5502 --display_error_number --diag_warning=225 --ptrdiff_size=32 -z -m"Tremolo.map" --stack_size=0x200 --heap_size=0x400 -i"C:/Users/Flip_/Documents/GitHub/ENGG54_LAB_3_PROJECT/Efeitos_Offline/Tremolo/inc" -i"F:/ccs/tools/compiler/c5500_4.4.1/lib" -i"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/lib" -i"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/C55xxCSL/lib" -i"F:/ccs/tools/compiler/c5500_4.4.1/include" --reread_libs --display_error_number --warn_sections --xml_link_info="Tremolo_linkInfo.xml" --rom_model --sys_stacksize=0x200 -o "Tremolo.out" $(ORDERED_OBJS)
 	@echo 'Finished building target: "$@"'
 	@echo ' '
 

@@ -4,7 +4,7 @@
 
 SHELL = cmd.exe
 
-CG_TOOL_ROOT := C:/ti/ccs1270/ccs/tools/compiler/c5500_4.4.1
+CG_TOOL_ROOT := F:/ccs/tools/compiler/c5500_4.4.1
 
 GEN_OPTS__FLAG := 
 GEN_CMDS__FLAG := 
@@ -137,21 +137,21 @@ endif
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXE_OUTPUTS += \
-Teste_AUDIO.out 
+TempoReal_V2_5.out \
 
 EXE_OUTPUTS__QUOTED += \
-"Teste_AUDIO.out" 
+"TempoReal_V2_5.out" \
 
 
 # All Target
 all: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
-	@$(MAKE) --no-print-directory -Onone "Teste_AUDIO.out"
+	@$(MAKE) --no-print-directory -Onone "TempoReal_V2_5.out"
 
 # Tool invocations
-Teste_AUDIO.out: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
+TempoReal_V2_5.out: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 	@echo 'Building target: "$@"'
 	@echo 'Invoking: C5500 Linker'
-	"C:/ti/ccs1270/ccs/tools/compiler/c5500_4.4.1/bin/cl55" -v5502 --memory_model=large -g --define=c5502 --display_error_number --diag_warning=225 --ptrdiff_size=32 -z -m"Teste_AUDIO.map" --stack_size=0x200 --heap_size=0x400 -i"C:/Users/FabioM/workspace_v12/Teste_AUDIO/inc" -i"C:/ti/ccs1270/ccs/tools/compiler/c5500_4.4.1/lib" -i"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/lib" -i"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/C55xxCSL/lib" -i"C:/ti/ccs1270/ccs/tools/compiler/c5500_4.4.1/include" --reread_libs --display_error_number --warn_sections --xml_link_info="Teste_AUDIO_linkInfo.xml" --rom_model --sys_stacksize=0x200 -o "Teste_AUDIO.out" $(ORDERED_OBJS)
+	"F:/ccs/tools/compiler/c5500_4.4.1/bin/cl55" -v5502 --memory_model=large -g --define=c5502 --display_error_number --diag_warning=225 --ptrdiff_size=32 -z -m"TempoReal_V2_5.map" --stack_size=0x200 --heap_size=0x400 -i"C:/Users/Flip_/Documents/GitHub/ENGG54_LAB_3_PROJECT/TempoReal_Otimizado/inc" -i"F:/ccs/tools/compiler/c5500_4.4.1/lib" -i"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/lib" -i"C:/Users/FabioM/Desktop/Faculdade UFBA/Semestre 2025.2/Laboratorio 3/ezdsp5502_v1/C55xxCSL/lib" -i"F:/ccs/tools/compiler/c5500_4.4.1/include" --reread_libs --display_error_number --warn_sections --xml_link_info="TempoReal_V2_5_linkInfo.xml" --rom_model --sys_stacksize=0x200 -o "TempoReal_V2_5.out" $(ORDERED_OBJS)
 	@echo 'Finished building target: "$@"'
 	@echo ' '
 
