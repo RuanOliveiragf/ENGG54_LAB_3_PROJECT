@@ -12,12 +12,12 @@ void initReverbEffect(void)
 
     // 2. Defina os GANHOS (0.0 a 0.99)
     // Combs: feedback alto para cauda longa (0.8 a 0.9)
-    // APs: geralmente 0.7 para difusão
-    static float comb_gains[4] = {0.77f, 0.75f, 0.73f, 0.71f};
+    // APs: geralmente 0.7 para difusÃ£o
+    static float comb_gains[4] = {0.84f, 0.82f, 0.80f, 0.78f};
     static float ap_gains[2]   = {0.70f, 0.70f};
 
     // 3. Mix (Wet level)
-    float wet = 1.0f;
+    float wet = 0.8f;
 
     // Inicializa passando os arrays
     initReverb(&g_reverb,
