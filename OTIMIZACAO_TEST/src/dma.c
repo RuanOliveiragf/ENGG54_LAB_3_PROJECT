@@ -194,11 +194,12 @@ void stopAudioDma(void)
 static void processAudioBlock(Uint16* rxBlock, Uint16* txBlock, Uint16 size)
 {
     Uint8 effect = getCurrentEffect();
+    int i;
     
     switch (effect) {
         case EFFECT_LOOPBACK:
             // Loopback simples - copia entrada para saída
-            for (int i = 0; i < size; i++) {
+            for (i = 0; i < size; i++) {
                 txBlock[i] = rxBlock[i];
             }
             break;
@@ -220,7 +221,7 @@ static void processAudioBlock(Uint16* rxBlock, Uint16* txBlock, Uint16 size)
             
         default:
             // Fallback para loopback (nunca deveria acontecer)
-            for (int i = 0; i < size; i++) {
+            for (i = 0; i < size; i++) {
                 txBlock[i] = rxBlock[i];
             }
             break;

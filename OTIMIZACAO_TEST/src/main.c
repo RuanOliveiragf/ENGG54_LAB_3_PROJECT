@@ -13,6 +13,7 @@
 #include "isr.h"
 #include "effects_controller.h"
 #include "csl_chip.h"
+extern void VECSTART(void);
 
 // Protótipos
 void configPort(void);
@@ -103,7 +104,8 @@ void effectChangeFeedback(Uint8 effect)
     EZDSP5502_I2CGPIO_writeLine(LED0 + led, LOW);
     
     // Aguarda
-    for(volatile int i = 0; i < 50000; i++);
+    volatile int i;
+    for(i = 0; i < 50000; i++);
     
     // Apaga o LED
     EZDSP5502_I2CGPIO_writeLine(LED0 + led, HIGH);
