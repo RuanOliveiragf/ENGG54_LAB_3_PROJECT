@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// flanger.h - Efeito Flanger
+// flanger.h - Efeito Flanger (Parâmetros idênticos ao Python)
 //////////////////////////////////////////////////////////////////////////////
 
 #ifndef FLANGER_H_
@@ -7,21 +7,29 @@
 
 #include "tistdtypes.h"
 
-// Configurações do Flanger (otimizadas para memória)
-#define FLANGER_DELAY_SIZE 512      // Buffer reduzido
-#define LFO_SIZE 128                // Tabela LFO reduzida
-#define FLANGER_L0 80               // Delay médio
-#define FLANGER_A 30                // Amplitude LFO
-#define FLANGER_fr 0.5f             // Frequência LFO (Hz)
-#define FLANGER_g 0x4000            // Ganho (0.5 em Q15)
+// Configurações do Buffer
+#define FLANGER_DELAY_SIZE 512
+#define LFO_SIZE 256
 
-// Variáveis globais (alocadas na seção effectsMem)
+// Parâmetros calculados para 48kHz (Python: 1ms a 5ms, 0.7 Gain)
+// Min: 48 samples, Max: 240 samples.
+#define FLANGER_L0 144              // Média ((240+48)/2)
+#define FLANGER_A 96                // Amplitude ((240-48)/2)
+#define FLANGER_G 22938             // Ganho 0.7 em Q15 (0x599A)
+
+// Incremento de fase para 0.5Hz @ 48kHz
+// Inc = (0.5 * 2^32) / 48000 = 44739
+#define LFO_INC 44739
+
+// Variáveis globais
 extern Int16 g_flangerBuffer[FLANGER_DELAY_SIZE];
 extern Int16 g_lfoTable[LFO_SIZE];
-extern volatile Uint16 g_flangerWriteIndex;
-extern volatile Uint16 g_lfoIndex;
 
-// Funções do Flanger
+extern volatile Uint16 g_flangerWriteIndex;
+extern volatile Uint32 g_flangerPhaseAcc;
+extern volatile Uint32 g_flangerPhaseInc;
+
+// Funções
 void initFlanger(void);
 void processAudioFlanger(Uint16* rxBlock, Uint16* txBlock, Uint16 blockSize);
 void clearFlanger(void);

@@ -44,7 +44,7 @@ SECTIONS
    dmaMem    >  DARAM align(32) fill = 00h
    
    /* Memória para buffers de efeitos (compartilhada) */
-   effectsMem > DARAM align(32) fill = 00h
+   effectsMem > CE0
 
    .ioport   >  IOPORT PAGE 2 /* Global & static ioport vars */
 }

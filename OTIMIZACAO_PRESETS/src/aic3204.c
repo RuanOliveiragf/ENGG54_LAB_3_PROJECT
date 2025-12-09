@@ -116,8 +116,8 @@ void initAIC3204( )
     AIC3204_rset( 0x37, 0x30 );// IN2_R to RADC_P through 40 kohmm
     AIC3204_rset( 0x36, 3 );   // CM_1 (common mode) to LADC_M through 40 kohm
     AIC3204_rset( 0x39, 0xc0 );// CM_1 (common mode) to RADC_M through 40 kohm
-    AIC3204_rset( 0x3b, 0 );   // MIC_PGA_L unmute
-    AIC3204_rset( 0x3c, 0 );   // MIC_PGA_R unmute
+    AIC3204_rset( 0x3b, 0x28 );   // MIC_PGA_L unmute
+    AIC3204_rset( 0x3c, 0x28 );   // MIC_PGA_R unmute
     AIC3204_rset( 0, 0 );      // Select page 0
     AIC3204_rset( 0x51, 0xc0 );// Powerup Left and Right ADC
     AIC3204_rset( 0x52, 0 );   // Unmute Left and Right ADC

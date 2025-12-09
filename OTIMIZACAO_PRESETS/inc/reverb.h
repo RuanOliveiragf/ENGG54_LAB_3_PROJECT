@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// reverb.h - Efeito Reverb (Schroeder)
+// reverb.h - Efeito Reverb Stereo
 //////////////////////////////////////////////////////////////////////////////
 
 #ifndef REVERB_H_
@@ -7,56 +7,64 @@
 
 #include "tistdtypes.h"
 
-// Configuração do Reverb
+// Configuração
 #define REVERB_NUM_COMBS       4
 #define REVERB_NUM_ALLPASSES   2
-#define REVERB_COMB_CHUNK      1200u  // REDUZIDO para economizar memória
-#define REVERB_AP_CHUNK        240u   // REDUZIDO
+
+// TAMANHO TOTAL DA MEMÓRIA DO REVERB
+// Hall requer aprox 13.000 words para Stereo.
+// Alocamos 16.000 words (32KB) para ter margem, cabendo na DARAM (64KB).
+#define REVERB_MEM_SIZE        32000u
+
+// Spread de 23 amostras (~0.5ms) para o canal direito
+#define REVERB_SPREAD          23u
 
 // Estruturas de Filtro
-
 typedef struct {
-    Int16* buffer;
-    Uint16 delay_samples;   // Número de amostras de atraso
-    Int16  gain_Q15;        // Ganho em Q15
-    Uint16 ptr;             // Índice do buffer circular
+    Int16* buffer;          // Ponteiro para o início do buffer deste filtro
+    Uint16 delay_samples;   // Tamanho real do delay
+    Int16  gain_Q15;
+    Uint16 ptr;
 } CombFilter;
 
 typedef struct {
     Int16* buffer;
-    Uint16 delay_samples;   // Número de amostras de atraso
-    Int16  gain_Q15;        // Ganho em Q15
-    Uint16 ptr;             // Índice do buffer circular
+    Uint16 delay_samples;
+    Int16  gain_Q15;
+    Uint16 ptr;
 } AllPassFilter;
 
+// Núcleo de processamento de UM canal
 typedef struct {
     CombFilter    comb[REVERB_NUM_COMBS];
     AllPassFilter allpass[REVERB_NUM_ALLPASSES];
-    Int16         wet_gain_Q15;   // ganho da parte reverberada (Q15)
-    Int16         dry_gain_Q15;   // ganho do sinal direto (Q15)
+} ReverbCore;
+
+// Estrutura Principal Stereo
+typedef struct {
+    ReverbCore    left;           // Canal Esquerdo
+    ReverbCore    right;          // Canal Direito
+    Int16         wet_gain_Q15;
+
+    // Gerenciamento de memória simples
+    Uint16        memAllocated;
 } Reverb;
 
-// -------------------- Presets de Reverb --------------------
-
-// IDs de preset
-#define REVERB_PRESET_HALL    0   // "REV-HALL"
-#define REVERB_PRESET_ROOM    1   // "REV-ROOM"
-#define REVERB_PRESET_STAGE   2   // "REV-STAGE"
+// Presets
+#define REVERB_PRESET_HALL    0
+#define REVERB_PRESET_ROOM    1
+#define REVERB_PRESET_STAGE   2
 #define REVERB_PRESET_COUNT   3
 
 typedef Uint8 ReverbPreset;
 
-// Variáveis globais
 extern Reverb       g_reverb;
 extern ReverbPreset g_reverbPreset;
 
-// Funções do Reverb
+// Funções
 void initReverb(void);
 void processAudioReverb(Uint16* rxBlock, Uint16* txBlock, Uint16 blockSize);
 void clearReverb(void);
-
-// Controle de preset
 void setReverbPreset(ReverbPreset preset);
-ReverbPreset getReverbPreset(void);
 
 #endif /* REVERB_H_ */

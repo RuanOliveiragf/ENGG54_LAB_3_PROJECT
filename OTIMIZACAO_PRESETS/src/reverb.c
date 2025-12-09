@@ -1,149 +1,131 @@
 //////////////////////////////////////////////////////////////////////////////
-// reverb.c - Implementação do Efeito Reverb
+// reverb.c - Implementação do Efeito Reverb Stereo
 //////////////////////////////////////////////////////////////////////////////
 
 #include "reverb.h"
 #include <math.h>
 
-// Taxa de amostragem
 #define FS_FLOAT 48000.0f
 
-// Buffers na memória de efeitos
-#pragma DATA_SECTION(combBuffer, "effectsMem")
-#pragma DATA_ALIGN(combBuffer, 4)
-static Int16 combBuffer[REVERB_NUM_COMBS * REVERB_COMB_CHUNK];
+// --- POOL DE MEMÓRIA ÚNICO ---
+#pragma DATA_SECTION(g_reverbMemory, "effectsMem")
+#pragma DATA_ALIGN(g_reverbMemory, 4)
+static Int16 g_reverbMemory[REVERB_MEM_SIZE];
 
-#pragma DATA_SECTION(apBuffer, "effectsMem")
-#pragma DATA_ALIGN(apBuffer, 4)
-static Int16 apBuffer[REVERB_NUM_ALLPASSES * REVERB_AP_CHUNK];
-
-// Variáveis globais
 Reverb       g_reverb;
 ReverbPreset g_reverbPreset = REVERB_PRESET_HALL;
 
-// -------------------------------------------------------------------------
-// Funções auxiliares
-// -------------------------------------------------------------------------
-static inline Int16 sat16(Int32 x)
-{
-    if (x > 32767)  return 32767;
-    if (x < -32768) return -32768;
-    return (Int16)x;
-}
-
-static Int16 floatToQ15(float x)
-{
-    if (x >= 1.0f)  return 32767;
-    if (x <= -1.0f) return -32768;
-    return (Int16)(x * 32768.0f);
-}
-
-static Uint16 msToSamples(float ms)
-{
-    float samples = ms * (FS_FLOAT / 1000.0f);
-    return (Uint16)samples;
-}
-
+// --- Estrutura de Presets (Mantida igual ao original) ---
 typedef struct {
     float comb_ms[REVERB_NUM_COMBS];
     float ap_ms[REVERB_NUM_ALLPASSES];
     float comb_gains[REVERB_NUM_COMBS];
     float ap_gains[REVERB_NUM_ALLPASSES];
-    float wet_gain;   // ganho da parte reverberada (0..1)
+    float wet_gain;
 } ReverbPresetCfg;
 
 static const ReverbPresetCfg REVERB_PRESETS[REVERB_PRESET_COUNT] = {
-    // REVERB_PRESET_HALL  ("REV-HALL")
-    {
-        // combs_ms
-        { 26.84f, 28.02f, 45.82f, 33.63f },
-        // aps_ms
-        { 2.35f,  6.90f },
-        // combs_gains
-        { 0.758f, 0.854f, 0.796f, 0.825f },
-        // aps_gains
-        { 0.653f, 0.659f },
-        // wet_gain
-        0.4f
-    },
-
-    // REVERB_PRESET_ROOM ("REV-ROOM")
-    {
-        { 419.0f, 359.0f, 251.0f, 467.0f },
-        { 7.06f,   6.46f },
-        { 0.50f,   0.48f, 0.56f, 0.44f },
-        { 0.716f,  0.613f },
-        0.2f
-    },
-
-    // REVERB_PRESET_STAGE ("REV-STAGE")
-    {
-        { 46.27f, 39.96f, 28.03f, 51.85f },
-        { 3.50f,  1.20f },
-        { 0.758f, 0.854f, 0.796f, 0.825f },
-        { 0.70f,  0.70f },
-        0.5f
-    }
+    // REV-HALL
+    { { 26.84f, 28.02f, 45.82f, 33.63f }, { 2.35f, 6.90f }, { 0.758f, 0.854f, 0.796f, 0.825f }, { 0.653f, 0.659f }, 0.4f },
+    // REV-ROOM
+    { { 419.0f, 359.0f, 251.0f, 467.0f }, { 7.06f, 6.46f }, { 0.50f, 0.48f, 0.56f, 0.44f },   { 0.716f, 0.613f }, 0.2f },
+    // REV-STAGE
+    { { 46.27f, 39.96f, 28.03f, 51.85f }, { 3.50f, 1.20f }, { 0.758f, 0.854f, 0.796f, 0.825f }, { 0.70f,  0.70f },  0.5f }
 };
 
-// -------------------------------------------------------------------------
-// Inicialização do Reverb (usa o preset atual g_reverbPreset)
-// -------------------------------------------------------------------------
-void initReverb(void)
+// Funções Auxiliares
+static inline Int16 sat16(Int32 x) {
+    if (x > 32767)  return 32767;
+    if (x < -32768) return -32768;
+    return (Int16)x;
+}
+
+static Int16 floatToQ15(float x) {
+    if (x >= 1.0f)  return 32767;
+    if (x <= -1.0f) return -32768;
+    return (Int16)(x * 32768.0f);
+}
+
+static Uint16 msToSamples(float ms) {
+    return (Uint16)(ms * (FS_FLOAT / 1000.0f));
+}
+
+static Int16* allocMemory(Uint16 size) {
+    Int16* ptr;
+    // Verifica overflow de memória
+    if ((Uint32)g_reverb.memAllocated + size > REVERB_MEM_SIZE) {
+        // Se faltar memória, aponta para o início (erro, mas evita crash)
+        // Idealmente, ajuste REVERB_MEM_SIZE
+        return &g_reverbMemory[0];
+    }
+    ptr = &g_reverbMemory[g_reverb.memAllocated];
+    g_reverb.memAllocated += size;
+    return ptr;
+}
+
+// Inicializa um único núcleo de Reverb (Canal L ou R)
+// offset_buffer: índice onde começa a memória deste canal
+// use_spread: 1 para adicionar o spread (Canal R), 0 para normal (Canal L)
+static void initReverbCore(ReverbCore* core, const ReverbPresetCfg* p, int use_spread)
 {
     int i, j;
 
-    if (g_reverbPreset >= REVERB_PRESET_COUNT) {
-        g_reverbPreset = REVERB_PRESET_HALL;
-    }
-
-    const ReverbPresetCfg* p = &REVERB_PRESETS[g_reverbPreset];
-
-    // Mix Dry/Wet (dry = 1 - wet)
-    float dry = 1.0f - p->wet_gain;
-    g_reverb.wet_gain_Q15 = floatToQ15(p->wet_gain);
-    g_reverb.dry_gain_Q15 = floatToQ15(dry);
-
-    // ---------------- COMB FILTERS (paralelo) ----------------
+    // Configura Comb Filters
     for (i = 0; i < REVERB_NUM_COMBS; i++) {
-        CombFilter* c = &g_reverb.comb[i];
-        c->buffer = &combBuffer[i * REVERB_COMB_CHUNK];
+        CombFilter* c = &core->comb[i];
 
+        // Calcula tamanho necessário
         Uint16 samples = msToSamples(p->comb_ms[i]);
-        if (samples < 10)                 samples = 10;
-        if (samples > REVERB_COMB_CHUNK)  samples = REVERB_COMB_CHUNK;
+        if (use_spread) samples += REVERB_SPREAD;
 
+        // Segurança mínima
+        if (samples < 2) samples = 2;
+
+        // Aloca EXATAMENTE o que precisa
+        c->buffer = allocMemory(samples);
         c->delay_samples = samples;
         c->gain_Q15      = floatToQ15(p->comb_gains[i]);
         c->ptr           = 0;
 
-        for (j = 0; j < REVERB_COMB_CHUNK; j++) {
-            c->buffer[j] = 0;
-        }
+        // Limpa buffer
+        for(j=0; j<samples; j++) c->buffer[j] = 0;
     }
 
-    // ---------------- ALL-PASS (série) ----------------
+    // Configura All-Pass Filters
     for (i = 0; i < REVERB_NUM_ALLPASSES; i++) {
-        AllPassFilter* ap = &g_reverb.allpass[i];
-        ap->buffer = &apBuffer[i * REVERB_AP_CHUNK];
+        AllPassFilter* ap = &core->allpass[i];
 
         Uint16 samples = msToSamples(p->ap_ms[i]);
-        if (samples < 10)               samples = 10;
-        if (samples > REVERB_AP_CHUNK)  samples = REVERB_AP_CHUNK;
+        if (samples < 2) samples = 2;
 
+        ap->buffer = allocMemory(samples);
         ap->delay_samples = samples;
         ap->gain_Q15      = floatToQ15(p->ap_gains[i]);
         ap->ptr           = 0;
 
-        for (j = 0; j < REVERB_AP_CHUNK; j++) {
-            ap->buffer[j] = 0;
-        }
+        for(j=0; j<samples; j++) ap->buffer[j] = 0;
     }
 }
 
-// -------------------------------------------------------------------------
-// Processamento All-Pass
-// -------------------------------------------------------------------------
+// Inicialização Global
+void initReverb(void)
+{
+    // Reseta alocador de memória
+    g_reverb.memAllocated = 0;
+
+    if (g_reverbPreset >= REVERB_PRESET_COUNT) g_reverbPreset = REVERB_PRESET_HALL;
+    const ReverbPresetCfg* p = &REVERB_PRESETS[g_reverbPreset];
+
+    g_reverb.wet_gain_Q15 = floatToQ15(p->wet_gain);
+
+    // Inicializa L (sem spread)
+    initReverbCore(&g_reverb.left, p, 0);
+
+    // Inicializa R (com spread de 23 amostras)
+    initReverbCore(&g_reverb.right, p, 1);
+}
+
+// Processa All-Pass (Genérico)
 static Int16 processAllPass(Int16 input, AllPassFilter* apf)
 {
     Int16 delayed = apf->buffer[apf->ptr];
@@ -154,107 +136,90 @@ static Int16 processAllPass(Int16 input, AllPassFilter* apf)
     // y[n] = -g * v[n] + d[n]
     Int32 output = -(((Int32)apf->gain_Q15 * vn) >> 15) + (Int32)delayed;
 
-    // Salva v[n] no buffer
     apf->buffer[apf->ptr] = sat16(vn);
 
     apf->ptr++;
-    if (apf->ptr >= apf->delay_samples) {
-        apf->ptr = 0;
-    }
+    if (apf->ptr >= apf->delay_samples) apf->ptr = 0;
 
     return sat16(output);
 }
 
-// -------------------------------------------------------------------------
-// Processamento do Reverb (amostra por amostra)
-// -------------------------------------------------------------------------
-static Int16 processReverbSample(Int16 input)
+// Processa uma amostra completa (Comb Paralelo + AP Série)
+static Int16 processReverbSample(Int16 input, ReverbCore* core, Int16 wetGain)
 {
     int i;
     Int32 accComb = 0;
 
-    // Atenua entrada para evitar overflow
-    Int16 attInput = input >> 2;
-
-    // Combs em paralelo
+    // 1. Combs em paralelo
     for (i = 0; i < REVERB_NUM_COMBS; i++) {
-        CombFilter* c = &g_reverb.comb[i];
+        CombFilter* c = &core->comb[i];
         Int16 delayed = c->buffer[c->ptr];
+
         accComb += (Int32)delayed;
 
-        // Feedback: Input + Gain * Delayed
-        Int32 fb = (Int32)attInput +
-                   (((Int32)c->gain_Q15 * (Int32)delayed) >> 15);
+        // Feedback
+        Int32 fb = (Int32)input + (((Int32)c->gain_Q15 * (Int32)delayed) >> 15);
         c->buffer[c->ptr] = sat16(fb);
 
         c->ptr++;
-        if (c->ptr >= c->delay_samples) {
-            c->ptr = 0;
-        }
+        if (c->ptr >= c->delay_samples) c->ptr = 0;
     }
 
-    // Soma dos combs
-    Int16 combOut = sat16(accComb >> 1);
+    // Atenuação da soma dos combs (senão satura rápido)
+    Int16 combOut = sat16(accComb >> 2);
 
-    // All-pass em série
+    // 2. All-pass em série
     Int16 apSignal = combOut;
     for (i = 0; i < REVERB_NUM_ALLPASSES; i++) {
-        apSignal = processAllPass(apSignal, &g_reverb.allpass[i]);
+        apSignal = processAllPass(apSignal, &core->allpass[i]);
     }
 
-    // Mix Dry/Wet
-    Int32 dryPart = ((Int32)g_reverb.dry_gain_Q15 * (Int32)input) >> 15;
-    Int32 wetPart = ((Int32)g_reverb.wet_gain_Q15 * (Int32)apSignal) >> 15;
+    // 3. Mix Wet
+    Int32 wetPart = ((Int32)wetGain * (Int32)apSignal) >> 15;
 
-    return sat16(dryPart + wetPart);
+    // Soma com Dry (Input)
+    return sat16((Int32)input + wetPart);
 }
 
-// -------------------------------------------------------------------------
-// Processamento em bloco
-// -------------------------------------------------------------------------
+// --- LOOP PRINCIPAL (STEREO) ---
+// O buffer rxBlock vem intercalado: L, R, L, R...
 void processAudioReverb(Uint16* rxBlock, Uint16* txBlock, Uint16 blockSize)
 {
     int i;
-    for (i = 0; i < blockSize; i++) {
-        txBlock[i] = (Uint16)processReverbSample((Int16)rxBlock[i]);
+    Int16 wet = g_reverb.wet_gain_Q15;
+
+    // blockSize é o total de elementos (amostras L + R)
+    // Avançamos de 2 em 2 para processar o par estéreo
+    for (i = 0; i < blockSize; i += 2) {
+
+        // --- CANAL ESQUERDO (i) ---
+        // Usa g_reverb.left (delays originais)
+        txBlock[i] = (Uint16)processReverbSample(
+            (Int16)rxBlock[i],
+            &g_reverb.left,
+            wet
+        );
+
+        // --- CANAL DIREITO (i+1) ---
+        // Usa g_reverb.right (delays + spread)
+        txBlock[i+1] = (Uint16)processReverbSample(
+            (Int16)rxBlock[i+1],
+            &g_reverb.right,
+            wet
+        );
     }
 }
 
-// -------------------------------------------------------------------------
-// Limpeza do Reverb
-// -------------------------------------------------------------------------
 void clearReverb(void)
 {
-    int i, j;
-
-    // Limpa buffers dos combs
-    for (i = 0; i < REVERB_NUM_COMBS; i++) {
-        for (j = 0; j < REVERB_COMB_CHUNK; j++) {
-            combBuffer[i * REVERB_COMB_CHUNK + j] = 0;
-        }
-        g_reverb.comb[i].ptr = 0;
-    }
-
-    // Limpa buffers dos all-pass
-    for (i = 0; i < REVERB_NUM_ALLPASSES; i++) {
-        for (j = 0; j < REVERB_AP_CHUNK; j++) {
-            apBuffer[i * REVERB_AP_CHUNK + j] = 0;
-        }
-        g_reverb.allpass[i].ptr = 0;
-    }
+    // Apenas reinicializa, o que zera os ponteiros e limpa buffers
+    initReverb();
 }
 
-// -------------------------------------------------------------------------
-// Controle de preset
-// -------------------------------------------------------------------------
 void setReverbPreset(ReverbPreset preset)
 {
-    if (preset >= REVERB_PRESET_COUNT) {
-        preset = REVERB_PRESET_HALL;
-    }
+    if (preset >= REVERB_PRESET_COUNT) preset = REVERB_PRESET_HALL;
     g_reverbPreset = preset;
-
-    // Reconfigura o reverb com os novos parâmetros
     initReverb();
 }
 

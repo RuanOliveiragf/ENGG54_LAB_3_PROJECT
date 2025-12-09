@@ -1,93 +1,130 @@
 //////////////////////////////////////////////////////////////////////////////
-// flanger.c - Implementação do Efeito Flanger
+// flanger.c - Implementação Exata do Python em C
 //////////////////////////////////////////////////////////////////////////////
 
 #include "flanger.h"
 #include <math.h>
 
-// Buffers alocados na seção especial para efeitos
 #pragma DATA_SECTION(g_flangerBuffer, "effectsMem")
 #pragma DATA_ALIGN(g_flangerBuffer, 4)
 Int16 g_flangerBuffer[FLANGER_DELAY_SIZE];
 
 #pragma DATA_SECTION(g_lfoTable, "effectsMem")
+#pragma DATA_ALIGN(g_lfoTable, 4)
 Int16 g_lfoTable[LFO_SIZE];
 
 volatile Uint16 g_flangerWriteIndex = 0;
-volatile Uint16 g_lfoIndex = 0;
+volatile Uint32 g_flangerPhaseAcc = 0;
+volatile Uint32 g_flangerPhaseInc = 0;
 
-// Inicialização do Flanger
+static inline Int16 sat16(Int32 x) {
+    if (x > 32767)  return 32767;
+    if (x < -32768) return -32768;
+    return (Int16)x;
+}
+
 void initFlanger(void)
 {
     int i;
     float rad;
     
-    // Limpa buffer do flanger
+    // 1. Limpa Buffer
     for (i = 0; i < FLANGER_DELAY_SIZE; i++) {
         g_flangerBuffer[i] = 0;
     }
     
-    // Gera tabela LFO (seno em Q15)
+    // 2. Gera Tabela de Seno (Full Range -32767 a +32767)
+    // Isso corresponde ao "sin(wn)" da fórmula do Python
     for (i = 0; i < LFO_SIZE; i++) {
-        rad = (float)i / LFO_SIZE * (2.0f * 3.14159265359f);
+        rad = (float)i / (float)LFO_SIZE * (2.0f * 3.14159265359f);
         g_lfoTable[i] = (Int16)(sinf(rad) * 32767.0f);
     }
     
-    // Reseta índices
+    // 3. Configura Oscilador para 0.5 Hz
+    g_flangerPhaseInc = LFO_INC;
+    g_flangerPhaseAcc = 0;
     g_flangerWriteIndex = 0;
-    g_lfoIndex = 0;
 }
 
-// Processamento do Flanger
 void processAudioFlanger(Uint16* rxBlock, Uint16* txBlock, Uint16 blockSize)
 {
     int i;
-    Int32 lfoSin_Q15;
-    Int32 currentDelay_L;
-    Int16 y_n, x_n, x_n_L;
-    Uint16 readIndex;
+
+    // Variáveis LFO
+    Uint16 lfo_idx;
+    Int32 lfo_val_Q15;
+
+    // Variáveis Delay
+    Int32 delay_Q15;
+    Int16 int_delay;
+    Int16 frac_delay;
+    Int16 samp1, samp2, delayed_sample;
+    Uint16 idx1, idx2;
+    int rawIdx;
+
+    // Áudio
+    Int16 x_n;
+    Int32 wet_signal, output_32;
 
     for (i = 0; i < blockSize; i++)
     {     
-        // Amostra de entrada
-        x_n = rxBlock[i];
+        x_n = (Int16)rxBlock[i];
         
-        // Obtém valor do LFO
-        lfoSin_Q15 = (Int32)g_lfoTable[g_lfoIndex];
-        g_lfoIndex = (g_lfoIndex + 1) % LFO_SIZE;
+        // --- 1. LFO (Oscilador 0.5Hz) ---
+        // Incrementa fase
+        g_flangerPhaseAcc += g_flangerPhaseInc;
+
+        // Pega os 8 bits superiores para índice (2^8 = 256 = LFO_SIZE)
+        lfo_idx = (Uint16)(g_flangerPhaseAcc >> 24);
+        lfo_val_Q15 = (Int32)g_lfoTable[lfo_idx];
+
+        // --- 2. CÁLCULO DO DELAY (Lógica Python: L0 + A * sin) ---
+        // Delay em Q15 = (144 << 15) + (96 * Seno_Q15)
+        // Isso varia o delay exatamente entre 48 e 240 amostras (1ms a 5ms)
+        delay_Q15 = ((Int32)FLANGER_L0 << 15) + ((Int32)FLANGER_A * lfo_val_Q15);
         
-        // Calcula delay variável L(n) = L0 + (A * M(n))
-        currentDelay_L = FLANGER_L0 + ((FLANGER_A * lfoSin_Q15) >> 16);
+        // Segurança
+        if (delay_Q15 < 32768) delay_Q15 = 32768; // Minimo 1.0
+
+        // Separação Inteira/Fracionária
+        int_delay = (Int16)(delay_Q15 >> 15);
+        frac_delay = (Int16)(delay_Q15 & 0x7FFF);
+
+        // --- 3. LEITURA COM INTERPOLAÇÃO ---
+        // Posição de leitura: (Escrita - Delay)
+        rawIdx = (int)g_flangerWriteIndex - int_delay;
+        while (rawIdx < 0) rawIdx += FLANGER_DELAY_SIZE;
+        idx1 = (Uint16)rawIdx;
+
+        // Amostra vizinha para interpolação
+        rawIdx = (int)idx1 - 1;
+        while (rawIdx < 0) rawIdx += FLANGER_DELAY_SIZE;
+        idx2 = (Uint16)rawIdx;
         
-        // Limita delay
-        if (currentDelay_L < 1) currentDelay_L = 1;
-        if (currentDelay_L >= FLANGER_DELAY_SIZE) currentDelay_L = FLANGER_DELAY_SIZE - 1;
+        samp1 = g_flangerBuffer[idx1];
+        samp2 = g_flangerBuffer[idx2];
         
-        // Calcula índice de leitura no buffer circular
-        readIndex = (g_flangerWriteIndex - (int)currentDelay_L + FLANGER_DELAY_SIZE) % FLANGER_DELAY_SIZE;
-        x_n_L = g_flangerBuffer[readIndex];
+        // Fórmula: y = s1 + frac * (s2 - s1)
+        delayed_sample = samp1 + (Int16)(((Int32)frac_delay * (samp2 - samp1)) >> 15);
         
-        // Aplica equação do flanger: y(n) = x(n) + g * x[n - L(n)]
-        y_n = x_n + (Int16)(((Int32)FLANGER_g * (Int32)x_n_L) >> 15);
-        txBlock[i] = y_n;
+        // --- 4. MIXAGEM ---
+        // y[n] = x[n] + gain * delayed
+        // Ganho ajustado para 0.7 (22938)
+        wet_signal = ((Int32)FLANGER_G * (Int32)delayed_sample) >> 15;
+        output_32 = (Int32)x_n + wet_signal;
         
-        // Atualiza buffer circular
+        txBlock[i] = (Uint16)sat16(output_32);
+
+        // Atualiza Buffer
         g_flangerBuffer[g_flangerWriteIndex] = x_n;
-        g_flangerWriteIndex = (g_flangerWriteIndex + 1) % FLANGER_DELAY_SIZE;
+        g_flangerWriteIndex++;
+        if (g_flangerWriteIndex >= FLANGER_DELAY_SIZE) {
+            g_flangerWriteIndex = 0;
+        }
     }
 }
 
-// Limpeza do Flanger
 void clearFlanger(void)
 {
-    int i;
-    
-    // Limpa buffer
-    for (i = 0; i < FLANGER_DELAY_SIZE; i++) {
-        g_flangerBuffer[i] = 0;
-    }
-    
-    // Reseta índices
-    g_flangerWriteIndex = 0;
-    g_lfoIndex = 0;
+    initFlanger();
 }
