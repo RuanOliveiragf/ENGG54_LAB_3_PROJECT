@@ -23,6 +23,8 @@ typedef struct {
 // Sistema de controle
 typedef struct {
     Uint8 currentEffect;
+    // Flag para ativar o estágio de Pitch Shift (Pré-processamento)
+    Uint8 pitchShiftActive;
     Uint8 effectInitialized[EFFECT_COUNT];
     Uint8 effectActive[EFFECT_COUNT];
     EffectInfo effects[EFFECT_COUNT];
@@ -35,6 +37,11 @@ extern volatile Uint8 currentEffect;  // Compatibilidade
 // Funções do controlador
 void initEffectController(void);
 void setEffect(Uint8 effect);
+
+// --- Controle do Pitch Shift ---
+void setPitchShiftEnabled(Uint8 enabled);
+Uint8 isPitchShiftEnabled(void);
+
 Uint8 getNextEffect(Uint8 current);
 void cleanupEffect(Uint8 effect);
 void cleanupAllEffects(void);

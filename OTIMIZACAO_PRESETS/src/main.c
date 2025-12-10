@@ -13,7 +13,8 @@
 #include "isr.h"
 #include "effects_controller.h"
 #include "csl_chip.h"
-#include "reverb.h"   // para usar setReverbPreset / presets
+#include "reverb.h"
+#include "pitch_shift.h"
 
 // Vetor de interrupção (definido em vectors.asm)
 extern void VECSTART(void);
@@ -50,25 +51,19 @@ void main(void)
     initTimer0();
     initAIC3204();
 
-    // 3. Inicializa sistema de efeitos
-    initEffectController();               // começa em LOOPBACK
-    setReverbPreset(REVERB_PRESET_HALL);  // preset default do reverb
+    initEffectController();
+    setReverbPreset(REVERB_PRESET_HALL);
+    initPitchShift();
 
-    // 4. Configura DMA
     configAudioDma();
-
-    // 5. Habilita interrupções
     IRQ_globalEnable();
 
-    // 6. Inicia periféricos
     startAudioDma();
     EZDSP5502_MCBSP_init();
     startTimer0();
     oled_start();
 
-    // 7. Loop principal
-    while (1)
-    {
+    while (1) {
         checkTimer();
         checkSwitch();
     }
@@ -128,12 +123,7 @@ void effectChangeFeedback(Uint8 effect)
 
     // Acende o LED (ativo em LOW)
     EZDSP5502_I2CGPIO_writeLine(LED0 + led, LOW);
-
-    // Pequeno delay de software
-    for (i = 0; i < 50000; i++)
-        ;
-
-    // Apaga o LED
+    for (i = 0; i < 50000; i++);
     EZDSP5502_I2CGPIO_writeLine(LED0 + led, HIGH);
 }
 
@@ -170,53 +160,75 @@ void checkSwitch(void)
             changeTimer();
             sw1State = 0;
         }
-    }
-    else
-    {
+    } else {
         sw1State = 1;
     }
 
     // --- SW1: muda efeito / preset (detecção de borda 1 -> 0)
     if ((sw1Raw == 0) && (lastEffectButtonState == 1))
     {
-        effectStep = (effectStep + 1u) % 7u;
+        effectStep = (effectStep + 1u) % 9u; // Ajustar caso queira colocar mais efeitos (contador circular)
 
         switch (effectStep)
         {
             case 0: // LOOPBACK
+                setPitchShiftEnabled(0);
                 setEffect(EFFECT_LOOPBACK);
                 break;
 
-            case 1: // FLANGER
-                setEffect(EFFECT_FLANGER);
-                break;
-
-            case 2: // TREMOLO
-                setEffect(EFFECT_TREMOLO);
-                break;
-
-            case 3: // REVERB - genérico (mantém o preset atual)
-                setEffect(EFFECT_REVERB);
-                break;
-
-            case 4: // REVERB + preset HALL
+            case 1: // REVERB HALL
+                setPitchShiftEnabled(0);
                 setReverbPreset(REVERB_PRESET_HALL);
                 setEffect(EFFECT_REVERB);
                 break;
 
-            case 5: // REVERB + preset ROOM
+            case 2: // REVERB ROOM 2
+                setPitchShiftEnabled(0);
                 setReverbPreset(REVERB_PRESET_ROOM);
                 setEffect(EFFECT_REVERB);
                 break;
 
-            case 6: // REVERB + preset STAGE
+            case 3: // REVERB STAGE + PITCH SHIFT (B)
+                setPitchShiftEnabled(1);
+                setPitchFrequency(493.88f);
                 setReverbPreset(REVERB_PRESET_STAGE);
                 setEffect(EFFECT_REVERB);
                 break;
 
+            case 4: // REVERB STAGE + PITCH SHIFT (D)
+                setPitchShiftEnabled(1);
+                setPitchFrequency(293.66f);
+                setReverbPreset(REVERB_PRESET_STAGE);
+                setEffect(EFFECT_REVERB);
+                break;
+
+            case 5: // REVERB STAGE + PITCH SHIFT (F)
+                setPitchShiftEnabled(1);
+                setPitchFrequency(349.23f);
+                setReverbPreset(REVERB_PRESET_STAGE);
+                setEffect(EFFECT_REVERB);
+                break;
+
+            case 6: // REVERB STAGE + PITCH SHIFT (Gb)
+                setPitchShiftEnabled(1);
+                setPitchFrequency(369.99f);
+                setReverbPreset(REVERB_PRESET_STAGE);
+                setEffect(EFFECT_REVERB);
+                break;
+
+            case 7: // FLANGER
+                setPitchShiftEnabled(0);
+                setEffect(EFFECT_FLANGER);
+                break;
+
+            case 8: // TREMOLO
+                setPitchShiftEnabled(0);
+                setEffect(EFFECT_TREMOLO);
+                break;
+
             default:
-                // Segurança: volta para LOOPBACK
                 effectStep = 0;
+                setPitchShiftEnabled(0);
                 setEffect(EFFECT_LOOPBACK);
                 break;
         }
@@ -224,6 +236,5 @@ void checkSwitch(void)
         // Feedback visual baseado no efeito atual (LOOPBACK, FLANGER, TREMOLO, REVERB)
         effectChangeFeedback(getCurrentEffect());
     }
-
     lastEffectButtonState = sw1Raw;
 }

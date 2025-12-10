@@ -7,6 +7,7 @@
 #include "tremolo.h"
 #include "reverb.h"
 #include <string.h>
+#include "pitch_shift.h"
 
 // Controlador global
 EffectController g_effectController;
@@ -32,6 +33,7 @@ void initEffectController(void)
     
     // Estado inicial
     g_effectController.currentEffect = EFFECT_LOOPBACK;
+    g_effectController.pitchShiftActive = 0; // Começa desativado
     
     for (i = 0; i < EFFECT_COUNT; i++) {
         g_effectController.effectInitialized[i] = 0;
@@ -87,6 +89,24 @@ void setEffect(Uint8 effect)
     g_effectController.currentEffect = effect;
     g_effectController.effectActive[effect] = 1;
     currentEffect = effect;
+}
+
+// Configura estado do Pitch Shift
+void setPitchShiftEnabled(Uint8 enabled)
+{
+    // Se estava desligado e vai ligar, inicializa para limpar buffers
+    if (enabled && !g_effectController.pitchShiftActive) {
+        initPitchShift();
+        // CUIDADO: initPitchShift reseta a frequência para Default (1.0x).
+        // Quem chamar esta função deve setar a frequência DEPOIS.
+    }
+    g_effectController.pitchShiftActive = enabled;
+}
+
+// Retorna se Pitch Shift está ativo
+Uint8 isPitchShiftEnabled(void)
+{
+    return g_effectController.pitchShiftActive;
 }
 
 // Obtém próximo efeito na sequência

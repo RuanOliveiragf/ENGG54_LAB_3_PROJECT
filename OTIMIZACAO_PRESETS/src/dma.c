@@ -13,10 +13,10 @@
 #include "flanger.h"
 #include "tremolo.h"
 #include "reverb.h"
+#include "pitch_shift.h" // Necessário para processAudioPitchShift
 
 // =================== VARIÁVEIS GLOBAIS ===================
 
-// Handles para os canais de DMA
 static DMA_Handle hDmaRx;
 static DMA_Handle hDmaTx;
 
@@ -140,10 +140,8 @@ void configAudioDma(void)
     txAddr = ((Uint32)&TxBuffer) << 1;
     rxAddr = ((Uint32)&RxBuffer) << 1;
 
-    // 2. Configura TX (Origem = TxBuffer)
-    dmaTxConfig.dmacssal = (DMA_AdrPtr)(txAddr & 0xFFFF); // Parte Baixa
-    dmaTxConfig.dmacssau = (Uint16)(txAddr >> 16);        // Parte Alta (IMPORTANTE!)
-
+    dmaTxConfig.dmacssal = (DMA_AdrPtr)(txAddr & 0xFFFF);
+    dmaTxConfig.dmacssau = (Uint16)(txAddr >> 16);
     hDmaTx = DMA_open(DMA_CHA0, 0);
     DMA_config(hDmaTx, &dmaTxConfig);
 
@@ -190,39 +188,45 @@ void stopAudioDma(void)
 
 // =================== PROCESSAMENTO DE EFEITOS ===================
 
-// Processador principal de áudio (chama o efeito ativo)
 static void processAudioBlock(Uint16* rxBlock, Uint16* txBlock, Uint16 size)
 {
     Uint8 effect = getCurrentEffect();
+    Uint16* stageInput = rxBlock;
     int i;
     
+    // --- ESTÁGIO 1: Pitch Shift (Se ativo) ---
+    // O Pitch Shift processa Rx -> Tx.
+    // Se ativado, o áudio transformado já estará em 'txBlock'.
+    if (isPitchShiftEnabled()) {
+        processAudioPitchShift(rxBlock, txBlock);
+        stageInput = txBlock; // Próximo efeito lê do Tx (in-place)
+    }
+
+    // --- ESTÁGIO 2: Efeito Principal ---
     switch (effect) {
         case EFFECT_LOOPBACK:
-            // Loopback simples - copia entrada para saída
-            for (i = 0; i < size; i++) {
-                txBlock[i] = rxBlock[i];
+            // Se Pitch Shift estiver OFF, precisamos copiar Rx->Tx.
+            // Se Pitch Shift estiver ON, 'txBlock' já está pronto, não faz nada.
+            if (!isPitchShiftEnabled()) {
+                for (i = 0; i < size; i++) txBlock[i] = rxBlock[i];
             }
             break;
             
         case EFFECT_FLANGER:
-            // Processa efeito Flanger
-            processAudioFlanger(rxBlock, txBlock, size);
+            processAudioFlanger(stageInput, txBlock, size);
             break;
             
         case EFFECT_TREMOLO:
-            // Processa efeito Tremolo
-            processAudioTremolo(rxBlock, txBlock, size);
+            processAudioTremolo(stageInput, txBlock, size);
             break;
             
         case EFFECT_REVERB:
-            // Processa efeito Reverb
-            processAudioReverb(rxBlock, txBlock, size);
+            processAudioReverb(stageInput, txBlock, size);
             break;
             
         default:
-            // Fallback para loopback (nunca deveria acontecer)
-            for (i = 0; i < size; i++) {
-                txBlock[i] = rxBlock[i];
+            if (!isPitchShiftEnabled()) {
+                for (i = 0; i < size; i++) txBlock[i] = rxBlock[i];
             }
             break;
     }
@@ -252,8 +256,4 @@ interrupt void dmaRxIsr(void)
     processAudioBlock(pRx, pTx, AUDIO_BLOCK_SIZE);
 }
 
-// ISR do DMA de transmissão: não precisamos fazer nada
-interrupt void dmaTxIsr(void)
-{
-    // Vazio - a transmissão é automática pelo DMA
-}
+interrupt void dmaTxIsr(void) {}
