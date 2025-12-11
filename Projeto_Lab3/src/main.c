@@ -16,16 +16,19 @@
 #include "reverb.h"
 #include "pitch_shift.h"
 
-// DeclaraÃ§Ã£o do inÃ­cio da tabela de vetores em assembly
+// Vetor de interrupção (definido em vectors.asm)
 extern void VECSTART(void);
 
-// Prototipo
-void configPort(void);
-void effectChangeFeedback(Uint8 effect);
-void checkSwitch(void);
-static void toggleLED(void);
+// Protótipo do PLL (definido em pll.c)
+void initPLL(void);
 
-// VariÃ¡veis globais
+// Protótipos locais
+void configPort(void);
+void checkTimer(void);
+void checkSwitch(void);
+void effectChangeFeedback(Uint8 effect);
+
+// Variáveis globais
 extern Uint16 timerFlag;
 Uint8 ledNum   = 3;
 Uint8 sw1State = 0;   // usado para o SW0 (timer)
@@ -35,54 +38,39 @@ Uint8 sw1State = 0;   // usado para o SW0 (timer)
 // ---------------------------------------------------------------------------
 void main(void)
 {
-    // 1. Configuracao centralizada do CSL
+    // 1. Configuração centralizada do CSL
     CSL_init();
     IRQ_setVecs((Uint32)(&VECSTART));
     IRQ_globalDisable();
 
-    // 2. InicializaÃ§Ãµes bÃ¡sicas
+    // 2. Inicializações básicas
     initPLL();
     EZDSP5502_init();
     initLed();          // configura SW0, SW1 e LEDs
-    configPort();       // selecao de BSP e reforca da config dos switches
- 
-    // 3. Inicializa o display OLED
-    oled_start();
-
-    // 4. Inicializa AIC3204 (codec de audio)
+    configPort();       // seleção de BSP e reforço da config dos switches
+    initTimer0();
     initAIC3204();
 
-    // 5. Inicializa controlador de efeitos
     initEffectController();
-    initReverb();
+    setReverbPreset(REVERB_PRESET_HALL);
     initPitchShift();
 
-    // 6. Configura DMA de audio + Timer
     configAudioDma();
-    initTimer0();
-
-    // 7. Habilita interrupcoes globais e inicia DMA e Timer
     IRQ_globalEnable();
+
     startAudioDma();
+    EZDSP5502_MCBSP_init();
     startTimer0();
+    oled_start();
 
-    // Loop principal
-    while (1)
-    {
-        // Pisca XF via timer
-        if (timerFlag)
-        {
-            timerFlag = 0;
-            toggleLED();
-        }
-
-        // Verifica botoes
+    while (1) {
+        checkTimer();
         checkSwitch();
     }
 }
 
 // ---------------------------------------------------------------------------
-// Configuracao de portas extras (multiplexadores etc.)
+// Configuração de portas extras (multiplexadores etc.)
 // ---------------------------------------------------------------------------
 void configPort(void)
 {
@@ -91,7 +79,7 @@ void configPort(void)
     EZDSP5502_I2CGPIO_configLine(BSP_SEL1_ENn, OUT);
     EZDSP5502_I2CGPIO_writeLine(BSP_SEL1_ENn, LOW);
 
-    // Garante que os botÃµes estÃ£o como entrada (reforÃ§o)
+    // Garante que os botões estão como entrada (reforço)
     EZDSP5502_I2CGPIO_configLine(SW0, IN);
     EZDSP5502_I2CGPIO_configLine(SW1, IN);
 }
@@ -107,8 +95,26 @@ static void toggleLED(void)
         CHIP_FSET(ST1_55, XF, CHIP_ST1_55_XF_ON);
 }
 
+void checkTimer(void)
+{
+    if (timerFlag == 1)
+    {
+        timerFlag = 0;
+        toggleLED();
+
+        EZDSP5502_I2CGPIO_writeLine(
+            ledNum,
+            (~EZDSP5502_I2CGPIO_readLine(ledNum) & 0x01)
+        );
+
+        if (ledNum > 6)
+            ledNum = 3;
+        ledNum++;
+    }
+}
+
 // ---------------------------------------------------------------------------
-// Feedback visual de efeito (LEDs)
+// Feedback visual quando o efeito muda (pisca um LED)
 // ---------------------------------------------------------------------------
 void effectChangeFeedback(Uint8 effect)
 {
@@ -122,24 +128,34 @@ void effectChangeFeedback(Uint8 effect)
 }
 
 // ---------------------------------------------------------------------------
-// Leitura e tratativa dos botoes SW0/SW1
+// Leitura dos botões:
+//   - SW0: muda o período do timer
+//   - SW1: percorre a sequência:
+//
+//       0 → LOOPBACK
+//       1 → FLANGER
+//       2 → TREMOLO
+//       3 → REVERB           (preset atual; começa em HALL)
+//       4 → REVERB + HALL
+//       5 → REVERB + ROOM
+//       6 → REVERB + STAGE   (depois volta para 0)
 // ---------------------------------------------------------------------------
 void checkSwitch(void)
 {
     static Uint8 lastEffectButtonState = 1;  // estado anterior de SW1 (para borda)
-    static Uint8 effectStep = 0;            // 0..8, controla efeitos + presets
+    static Uint8 effectStep = 0;            // 0..6, controla efeitos + presets
 
     Uint8 sw0Raw;
     Uint8 sw1Raw;
 
-    // botoes (ativos em nivel baixo)
+    // Lê botões (ativos em nível baixo)
     sw0Raw = EZDSP5502_I2CGPIO_readLine(SW0);
     sw1Raw = EZDSP5502_I2CGPIO_readLine(SW1);
 
-    // --- SW0: controla o timer (pressiona -> alterna peri­odo)
+    // --- SW0: controla o timer (pressiona -> alterna período)
     if (sw0Raw == 0)
     {
-        if (sw1State)          // apenas na transicoes
+        if (sw1State)          // apenas na transição
         {
             changeTimer();
             sw1State = 0;
@@ -148,10 +164,10 @@ void checkSwitch(void)
         sw1State = 1;
     }
 
-    // --- SW1: muda efeito / preset (deteccao de borda 1 -> 0)
+    // --- SW1: muda efeito / preset (detecção de borda 1 -> 0)
     if ((sw1Raw == 0) && (lastEffectButtonState == 1))
     {
-        effectStep = (effectStep + 1u) % 9u; // 0..8
+        effectStep = (effectStep + 1u) % 9u; // Ajustar caso queira colocar mais efeitos (contador circular)
 
         switch (effectStep)
         {
