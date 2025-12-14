@@ -60,23 +60,17 @@ static const ReverbPresetCfg REVERB_PRESETS[REVERB_PRESET_COUNT] = {
        0      // comb_damp_shift = 0 (DESLIGADO -> mantém o timbre)
      },
 
-     // REV-ROOM-2 (FIEL AO ÁUDIO DE REFERÊNCIA)
+     // ROOM 2:
      {
-         // tempos originais  identidade do room
-         { 22.3f, 24.8f, 27.1f, 29.7f },
-         { 2.2f,  7.1f },
-
-         // feedback ORIGINAL (eco natural)
-         { 0.76f, 0.74f, 0.72f, 0.70f },
-         { 0.70f, 0.65f },
-
-         0.30f,  // wet_gain (eco audível, sem virar hall)
-         1.00f,  // dry_gain
-         1       // comb_damp_shift (QUASE desligado)
+         { 200.0f, 300.0f, 400.0f, 500.0f },  // comb_ms
+         { 7.06f, 6.46f },                    // all-pass_ms
+         { 0.50f, 0.48f, 0.56f, 0.44f },      // comb_gains
+         { 0.716f, 0.613f },                  // ap_gains
+         0.2f                                  // wet_gain
      },
 
     // REV-STAGE
-    {
+     {
         { 46.27f, 39.96f, 28.03f, 51.85f },
         { 3.50f, 1.20f },
         { 0.758f, 0.854f, 0.796f, 0.825f },
