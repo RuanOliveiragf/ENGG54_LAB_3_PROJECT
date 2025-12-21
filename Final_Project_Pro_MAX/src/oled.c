@@ -193,7 +193,6 @@ static void oled_print_char(char c)
 }
 
 // Funcao publica: mostra o nome do efeito na primeira linha
-// CORREÇÃO: Percorre a string de trás para frente para compensar o display invertido
 void oled_show_effect_name(const char* name)
 {
     int i;
@@ -210,9 +209,6 @@ void oled_show_effect_name(const char* name)
     oled_clear_page0();
 
     // 2. Percorre o texto do FINAL para o INÍCIO
-    // Se o display escreve da Direita -> Esquerda, enviamos a última letra primeiro.
-    // Ex: Enviamos 'K', o cursor move p/ esquerda. Enviamos 'C', move p/ esquerda...
-    // No final, a palavra "LOOPBACK" ficará correta visualmente.
     for (i = len - 1; i >= 0; i--)
     {
         char c = name[i];
