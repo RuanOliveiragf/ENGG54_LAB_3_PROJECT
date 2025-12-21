@@ -1,0 +1,3 @@
+[submodule "lab3_dsp_project"]
+	path = lab3_dsp_project
+	url = https://github.com/FelipeTrebino/lab3_dsp_project.git
