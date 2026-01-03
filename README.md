@@ -84,4 +84,4 @@ Ao pressionar o botão SW1, o sistema avança para o próximo efeito na seguinte
 ---
 
 Projeto desenvolvido pelos alunos Eduardo Vitor, Fábio Miguel, Felipe Trebino, Ruan Oliveira e Tiago Luigi para a disciplina ENGG54 - Laboratório Integrado III-A  (Laboratório de Processamento Digital de Sinais).
-> **Observação:** Sempre façam um GIT no começo do projeto.
+> **Observação:** "A diferença entre a civilização moderna e a barbárie primitiva não é a eletricidade, é o controle de versão; sem criar esse GitHub, somos apenas neandertais jogando arquivos .zip uns nos outros e rezando para que nada quebre."
