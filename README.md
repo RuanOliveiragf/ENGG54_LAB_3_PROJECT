@@ -1,4 +1,7 @@
 # Processador de Efeitos de Áudio em Tempo Real - DSP TMS320C5502
+Este projeto implementa um sistema de processamento de áudio em tempo real utilizando o kit de desenvolvimento eZdsp TMS320C5502. O sistema é capaz de aplicar diversos efeitos de áudio (*Flanger*, *Tremolo*, *Reverb* e *Pitch Shifters*) controlados via botões físicos, com *feedback* visual através de LEDs e display OLED.
+
+**Conteúdos**
 - [Processador de Efeitos de Áudio em Tempo Real - DSP TMS320C5502](#processador-de-efeitos-de-áudio-em-tempo-real---dsp-tms320c5502)
   - [📋 Funcionalidades Principais](#-funcionalidades-principais)
   - [🛠 Hardware e Software](#-hardware-e-software)
@@ -6,8 +9,6 @@
   - [📖 Manual de Uso](#-manual-de-uso)
   - [🚀 Como Compilar e Executar](#-como-compilar-e-executar)
   - [⚙️ Detalhes de Implementação](#️-detalhes-de-implementação)
-
-Este projeto implementa um sistema de processamento de áudio em tempo real utilizando o kit de desenvolvimento eZdsp TMS320C5502. O sistema é capaz de aplicar diversos efeitos de áudio (*Flanger*, *Tremolo*, *Reverb* e *Pitch Shifters*) controlados via botões físicos, com *feedback* visual através de LEDs e display OLED.
 
 ## 📋 Funcionalidades Principais
 - **Processamento em Tempo Real:** Utilização de DMA e McBSP para baixa latência.
